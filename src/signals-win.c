@@ -104,7 +104,7 @@ static void JL_NORETURN start_backtrace_fiber(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // collect the backtrace
-    ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, error_ctx, 1, NULL);
+    rec_backtrace_ctx(ptls->bt_data, &ptls->bt_size, JL_MAX_BT_SIZE, error_ctx, 1);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -130,8 +130,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size =
-                rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, 1, NULL);
+            rec_backtrace_ctx(ptls->bt_data, &ptls->bt_size, JL_MAX_BT_SIZE, ctxThread, 1);
         }
         else if (have_backtrace_fiber) {
             error_ctx = ctxThread;
@@ -350,8 +349,9 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 break;
             }
 
-            bt_size_step = rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                bt_size_max - bt_size_cur - 1, &ctxThread, 0, &incomplete);
+            incomplete = rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                                           &bt_size_step, bt_size_max - bt_size_cur - 1,
+                                           &ctxThread, 0);
         }
 
         if ((DWORD)-1 == ResumeThread(hMainThread)) {

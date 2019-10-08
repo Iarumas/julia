@@ -141,8 +141,8 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     if (!ptls2->safe_restore) {
         assert(exception);
-        ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                           (bt_context_t*)&state, 1, NULL);
+        rec_backtrace_ctx(ptls2->bt_data, &ptls2->bt_size, JL_MAX_BT_SIZE,
+                          (bt_context_t*)&state, 1);
         ptls2->sig_exception = exception;
     }
     jl_call_in_state(ptls2, &state, &jl_sig_throw);
@@ -448,22 +448,20 @@ void *mach_profile_listener(void *arg)
                 unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
 
                 if (forceDwarf == 0)
-                    bt_size_step =
-                        rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                                          bt_size_max - bt_size_cur - 1, uc, 0,
-                                          &incomplete);
+                    incomplete = rec_backtrace_ctx(
+                        (uintptr_t*)bt_data_prof + bt_size_cur,
+                        &bt_size_step, bt_size_max - bt_size_cur - 1, uc, 0);
                 else if (forceDwarf == 1)
-                    bt_size_step =
-                        rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur,
-                                                bt_size_max - bt_size_cur - 1, uc, 0,
-                                                &incomplete);
+                    incomplete = rec_backtrace_ctx_dwarf(
+                        (uintptr_t*)bt_data_prof + bt_size_cur, &bt_size_step,
+                        bt_size_max - bt_size_cur - 1, uc, 0);
                 else if (forceDwarf == -1)
                     jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
                 forceDwarf = -2;
 #else
-                bt_size_step =
-                    rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                                      bt_size_max - bt_size_cur - 1, uc, 0, &incomplete);
+                incomplete = rec_backtrace_ctx(
+                    (uintptr_t*)bt_data_prof + bt_size_cur, &bt_size_step,
+                    bt_size_max - bt_size_cur - 1, uc, 0);
 #endif
 
                 // Save the backtrace data

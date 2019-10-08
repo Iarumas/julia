@@ -175,8 +175,8 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
 static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx)
 {
     if (!ptls->safe_restore)
-        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx), 1, NULL);
+        rec_backtrace_ctx(ptls->bt_data, &ptls->bt_size, JL_MAX_BT_SIZE,
+                          jl_to_bt_context(sigctx), 1);
     ptls->sig_exception = e;
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
@@ -666,9 +666,10 @@ static void *signal_listener(void *arg)
             // do backtrace on thread contexts for critical signals
             // this part must be signal-handler safe
             if (critical) {
-                bt_size += rec_backtrace_ctx(bt_data + bt_size,
-                        JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context, 0, NULL);
+                size_t bt_size_step;
+                rec_backtrace_ctx(bt_data + bt_size, &bt_size_step,
+                                  JL_MAX_BT_SIZE / jl_n_threads - 1, signal_context, 0);
+                bt_size += bt_size_step;
                 bt_data[bt_size++] = 0;
             }
 
@@ -689,10 +690,9 @@ static void *signal_listener(void *arg)
                     if (jl_setjmp(buf, 0))
                         jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
                     else
-                        bt_size_step =
-                            rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                                              bt_size_max - bt_size_cur - 1,
-                                              signal_context, 0, &incomplete);
+                        incomplete = rec_backtrace_ctx(
+                            (uintptr_t*)bt_data_prof + bt_size_cur, &bt_size_step,
+                            bt_size_max - bt_size_cur - 1, signal_context, 0);
                     ptls->safe_restore = old_buf;
 
                     // save the backtrace data
